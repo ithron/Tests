@@ -1,12 +1,10 @@
 #ifndef SRE_FIXED_SIZED_TYPE_CONVERSION_HH
 #define SRE_FIXED_SIZED_TYPE_CONVERSION_HH
 
-#include "UniformTuple.hh"
-
 #include <array>
 #include <type_traits>
 #include <utility>
-#include <vector>
+#include <tuple>
 
 namespace Utilities {
 
