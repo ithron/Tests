@@ -8,7 +8,7 @@ namespace Utilities {
 namespace detail_ {
 
 template <class T, std::size_t N, class... Tail> struct UniformTupleHelper {
-  typedef UniformTupleHelper<T, N - 1, T, Tail...> type;
+  typedef typename UniformTupleHelper<T, N - 1, T, Tail...>::type type;
 };
 
 template <class T, class... Tail> struct UniformTupleHelper<T, 0, Tail...> {

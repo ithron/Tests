@@ -17,11 +17,11 @@ constexpr auto get_(T &&t, int) -> decltype(get<I>(std::forward<T>(t))) {
 }
 
 template <std::size_t I, class T>
-constexpr auto get_(T &&t, long) -> decltype(t[I]) {
-  return t[I];
+constexpr auto get_(T &&t, long) -> decltype(std::forward<T>(t)[I]) {
+  return std::forward<T>(t)[I];
 }
 
-template <std::size_t I, class T> constexpr auto get_(T &&t) {
+template <std::size_t I, class T> constexpr decltype(auto) get_(T &&t) {
   return get_<I>(std::forward<T>(t), 0);
 }
 
@@ -58,7 +58,10 @@ constexpr To convertFixedHelper(From &&from, std::index_sequence<I...>) {
 /// \param from object to convert.
 /// \return object of type To initialized with the elements from[0], ...
 /// from[N].
-template <class To, class From, std::size_t N = std::tuple_size<From>::value>
+template <
+  class To,
+  class From,
+  std::size_t N = std::tuple_size<typename std::decay<From>::type>::value>
 constexpr To convertFixed(From &&from) {
   return detail_::convertFixedHelper<To>(std::forward<From>(from),
                                          std::make_index_sequence<N>{});
@@ -79,4 +82,3 @@ static_assert(convertFixed<std::tuple<int, int>, detail_::test_::Test, 2>(
 } // namespace Utilities
 
 #endif // SRE_FIXED_SIZED_TYPE_CONVERSION_HH
-
