@@ -21,22 +21,26 @@ typedef std::vector<Triangle> TriangleSet;
 
 typedef std::tuple<VertexSet, TriangleSet> Mesh;
 
-template<class T> constexpr decltype(auto) getVertices(T &&mesh) {
+template <class T> constexpr decltype(auto) getVertices(T &&mesh) {
   using std::get;
   return get<0>(std::forward<T>(mesh));
 }
-template<class T> constexpr decltype(auto) getTriangles(T &&mesh) {
+template <class T> constexpr decltype(auto) getTriangles(T &&mesh) {
   using std::get;
   return get<1>(std::forward<T>(mesh));
 }
 
+namespace std {
 template <class T>
 std::ostream &operator<<(std::ostream &os, std::array<T, 3> const &v) {
   os << "(" << v[0] << ", " << v[1] << ", " << v[2] << ")";
   return os;
 }
+} // namespace std
 
+// clang-format off
 namespace boost { namespace spirit { namespace traits {
+// clang-format on
 
 template <class T, std::size_t N>
 struct is_container<std::array<T, N>> : mpl::false_ {};
@@ -49,7 +53,10 @@ struct transform_attribute<std::array<T, N>, UniformTuple<T &, N>, qi::domain> {
   static void post(Array &, type const &) {}
   static void fail(Array &) {}
 };
+
+// clang-format off
 }}}
+// clang-forman on
 
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
@@ -89,16 +96,18 @@ struct UnusedListGrammar
   : qi::grammar<Iterator, qi::locals<std::string>, ascii::blank_type> {
 
   UnusedListGrammar() : UnusedListGrammar::base_type(list) {
-    using qi::auto_;
-    using qi::eol;
     using qi::alnum;
+    using qi::auto_;
+    using qi::char_;
+    using qi::eol;
     using qi::lexeme;
     using qi::lit;
     using namespace qi::labels;
 
+    any = *(char_ - eol);
     listStart %= lexeme[+alnum] >> "start" >> +eol;
     listEnd = lit(_r1) >> "end" >> +eol;
-    unusedLine = !(listEnd(_r1)) >> +eol;
+    unusedLine = (any - listEnd(_r1)) >> +eol;
     list = listStart[_a = _1] >> *unusedLine(_a) >> listEnd(_a);
   }
 
@@ -106,30 +115,38 @@ struct UnusedListGrammar
   qi::rule<Iterator, void(std::string), ascii::blank_type> listEnd;
   qi::rule<Iterator, void(std::string), ascii::blank_type> unusedLine;
   qi::rule<Iterator, qi::locals<std::string>, ascii::blank_type> list;
+  qi::rule<Iterator, ascii::blank_type> any;
 };
 
-template<class Iterator>
+template <class Iterator>
 struct MeshGrammer : qi::grammar<Iterator, Mesh(), ascii::blank_type> {
 
   MeshGrammer() : MeshGrammer::base_type(start) {
-  using namespace std::string_literals;
+    using namespace std::string_literals;
     using namespace qi::labels;
 
-    start = (vertexSet("vertices"s)[phoenix::bind(
+    vertexSet %= vertexList("vertices"s);
+    triangleSet %= triangleList("triangles"s);
+    skip_ = skipList;
+    skip = skip_ - (vertexSet | triangleSet);
+
+    start = (vertexSet[phoenix::bind(
                [](Mesh &msh, VertexSet const &v) { getVertices(msh) = v; },
                _val, _1)] >>
-             *skipList) ^
-            (triangleSet("triangles"s)[phoenix::bind(
-               [](Mesh &msh, TriangleSet const &t) { getTriangles(msh) = t; },
-               _val, _1)] >>
-             *skipList) ^
-            *skipList;
+             *skip) ^
+            (triangleSet[phoenix::bind([](Mesh &msh, TriangleSet const &t) {
+              getTriangles(msh) = t;
+            }, _val, _1)] >> *skip) ^ *skip;
   }
 
-  qi::rule<Iterator, Mesh(), ascii::blank_type> start;
-  ListGrammar<Iterator, Vertex> vertexSet;
-  ListGrammar<Iterator, Triangle> triangleSet;
+  ListGrammar<Iterator, Vertex> vertexList;
+  ListGrammar<Iterator, Triangle> triangleList;
   UnusedListGrammar<Iterator> skipList;
+  qi::rule<Iterator, Mesh(), ascii::blank_type> start;
+  qi::rule<Iterator, ascii::blank_type> skip;
+  qi::rule<Iterator, ascii::blank_type> skip_;
+  qi::rule<Iterator, VertexSet(), ascii::blank_type> vertexSet;
+  qi::rule<Iterator, TriangleSet(), ascii::blank_type> triangleSet;
 };
 
 int main(int, char **) {
@@ -155,19 +172,24 @@ int main(int, char **) {
   MeshGrammer<Iterator> meshGrammar;
   Mesh mesh;
 
-  bool const res = qi::phrase_parse(input.begin(), input.end(), meshGrammar,
-                                    ascii::blank, mesh);
+  Iterator iter = input.begin();
+  bool const res =
+    qi::phrase_parse(iter, input.end(), meshGrammar, ascii::blank, mesh);
 
-  std::cout << "Matched: " << std::boolalpha << res << std::endl;
-  std::cout << "Mesh = (" << std::endl << "\tV = {" << std::endl;
+  std::cout << "Matched: " << std::boolalpha << (res && iter == input.end())
+            << std::endl;
+  std::cout << "Mesh = (" << std::endl
+            << "\tV = {" << std::endl;
   for (auto const &vi : getVertices(mesh)) {
     std::cout << "\t\t" << vi << "," << std::endl;
   }
-  std::cout << "\t}," << std::endl << "\tT = {" << std::endl;
+  std::cout << "\t}," << std::endl
+            << "\tT = {" << std::endl;
   for (auto const &ti : getTriangles(mesh)) {
     std::cout << "\t\t" << ti << "," << std::endl;
   }
-  std::cout << "\t}" << std::endl << ")" << std::endl;
+  std::cout << "\t}" << std::endl
+            << ")" << std::endl;
 
   return EXIT_SUCCESS;
 }
